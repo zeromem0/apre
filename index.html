@@ -826,6 +826,9 @@ function take(m) {
     if (m.t === 'hello') link.lastN = -1;
     if (link.lastN >= 0 && m.n > link.lastN + 1) link.gaps += m.n - link.lastN - 1;
     link.lastN = m.n;
+    // n is protocol 1: if its hello was missed (a page opened while the instrument
+    // already talked), the lines and the commands work all the same
+    if (link.proto < 1 && m.t !== 'hello') { Object.assign(link, { proto: 1, cmd: true, tickAt: performance.now() }); linkStatus(); }
   }
   if (m.t === 'hello') {
     Object.assign(link, { proto: m.proto || 0, dev: m.dev || '', fw: m.fw || '', cmd: (m.caps || []).includes('cmd'),
