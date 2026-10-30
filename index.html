@@ -522,7 +522,10 @@ function drawWave() {
   if (wave.th) {
     const y = Y(volts(wave.th));
     g.strokeStyle = '#a04848'; g.beginPath(); g.moveTo(L, y); g.lineTo(W - R, y); g.stroke();
-    g.fillStyle = '#c06060'; g.fillText('threshold', W - R - 76, y - 4);
+    g.font = font(12);
+    const tw = g.measureText('threshold').width;
+    g.fillStyle = 'rgba(11,12,16,0.85)'; g.fillRect(W - R - tw - 8, y - 17, tw + 6, 15);
+    g.fillStyle = '#c06060'; g.fillText('threshold', W - R - tw - 5, y - 5);
   }
   g.setLineDash([]);
 
@@ -897,6 +900,10 @@ async function connect() {
 async function openSerial(p) {
   try {
     await p.open({ baudRate: 115200, bufferSize: 65536 });
+    // DTR down and up: the instrument greets only when it sees DTR rise, and a page
+    // closed or reloaded suddenly left it up
+    await p.setSignals({ dataTerminalReady: false });
+    await new Promise(r => setTimeout(r, 300));   // longer than a turn of its main loop
     await p.setSignals({ dataTerminalReady: true });     // the instrument talks only to an open port
   } catch (e) { setState(String(e.message || e)); return; }
   port = p;
@@ -946,6 +953,9 @@ async function openUsb(dev) {
       // SET_LINE_CODING 115200 8N1 (the instrument ignores it, some stacks want it), then DTR and RTS
       await dev.controlTransferOut({ requestType: 'class', recipient: 'interface', request: 0x20, value: 0, index: comm },
                                    new Uint8Array([0x00, 0xC2, 0x01, 0x00, 0, 0, 8]));
+      // DTR down and up, as on Web Serial: a greeting at every opening
+      await dev.controlTransferOut({ requestType: 'class', recipient: 'interface', request: 0x22, value: 0, index: comm });
+      await new Promise(r => setTimeout(r, 300));   // longer than a turn of its main loop
       await dev.controlTransferOut({ requestType: 'class', recipient: 'interface', request: 0x22, value: 0x03, index: comm });
     }
     usb = { dev, comm, data, epIn, epOut };
