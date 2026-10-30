@@ -9,7 +9,7 @@
     --bg: #0e0f13; --panel: #171922; --line: #2a2d3a; --text: #f2f2f2; --muted: #8a8fa3;
     --accent: #ffcf3f; --ok: #5ee07a; --err: #ff5d5d; --trace: #9dff5e; --mark: #ff9f3f; --char: #6fc3ff;
     /* fonts every Windows has, all of one width; ui-monospace means nothing to Chrome there */
-    --mono: "Cascadia Mono", Consolas, "Lucida Console", "Roboto Mono", "Noto Sans Mono", "Droid Sans Mono", "Courier New", monospace;
+    --mono: "Cascadia Mono", Consolas, "Lucida Console", "Roboto Mono", "Noto Sans Mono", "Droid Sans Mono", monospace;
   }
   * { box-sizing: border-box; }
   /* the page never scrolls as a whole: a scrollbar coming and going changed the width, the grid
@@ -45,7 +45,7 @@
          min-height: 0; overflow: hidden; }
   .bigText { font-weight: 700; white-space: pre; line-height: 1; transition: color .6s; }
   .bigText.fresh { color: var(--accent); }
-  .bigText.empty { color: var(--muted); font-weight: 400; font-family: inherit; }
+  .bigText.empty { color: var(--muted); font-weight: 400; font-family: inherit; white-space: normal; text-align: center; }
   #history { max-height: 34vh; overflow-y: auto; border-top: 1px solid var(--line); background: var(--panel); }
   #history div { display: flex; gap: 14px; padding: 5px 16px; border-bottom: 1px solid var(--line); font-size: 15px; }
   #history .time, #history .src { color: var(--muted); flex: none; }
@@ -99,6 +99,31 @@
   #cmds button { padding: 7px 11px; }
   #appstate { color: var(--muted); font-size: 14px; }
   #state.warn { color: var(--err); }
+  #tabs, #more { display: contents; }         /* on a PC the groups are not seen */
+  #menuBtn { display: none; }
+  #insp.empty { display: none; }              /* no result yet: no empty bar */
+
+  /* A phone: the name, the state and Connect on one row; the tabs on one that scrolls
+     sideways; the commands; the rarely used buttons behind the menu. */
+  @media (max-width: 720px) {
+    header { gap: 6px; padding: 6px 10px; }
+    header h1 { font-size: 15px; order: 0; }
+    #state { order: 1; flex: 1; min-width: 0; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    #menuBtn { display: inline-block; order: 2; padding: 6px 12px; }
+    #connect { order: 3; padding: 6px 12px; }
+    header .grow { display: none; }
+    #tabs { display: flex; order: 10; width: 100%; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+    #tabs::-webkit-scrollbar { display: none; }
+    #tabs .tab { flex: none; padding: 6px 12px; font-size: 13px; }
+    #appstate { order: 11; font-size: 13px; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    #cmds { order: 12; display: flex; gap: 6px; }
+    #pause { order: 13; padding: 6px 12px; }
+    #cmds button { padding: 6px 12px; }
+    #more { display: none; }
+    header.open #more { display: flex; order: 14; width: 100%; gap: 6px; flex-wrap: wrap; align-items: center; }
+    #insp { padding: 6px 10px; gap: 10px; min-height: 0; }
+    #insp .name { font-size: 22px; } #insp .fmt { font-size: 17px; } #insp .more { font-size: 12px; }
+  }
 
   /* all three at once */
   #vAll .part { display: flex; flex-direction: column; min-height: 0; overflow: hidden; border-bottom: 1px solid var(--line); }
@@ -112,25 +137,30 @@
   <h1>apre</h1>
   <span id="state">not connected</span>
   <span class="grow"></span>
-  <button class="tab on" data-view="vAll">All</button>
-  <button class="tab" data-view="vInsp">Inspector</button>
-  <button class="tab" data-view="vLine">Line</button>
-  <button class="tab" data-view="vTerm">Terminal</button>
-  <button class="tab" data-view="vChars">Characters</button>
-  <button class="tab" data-view="vWave">Waveform</button>
+  <nav id="tabs">
+    <button class="tab on" data-view="vAll">All</button>
+    <button class="tab" data-view="vInsp">Inspector</button>
+    <button class="tab" data-view="vLine">Line</button>
+    <button class="tab" data-view="vTerm">Terminal</button>
+    <button class="tab" data-view="vChars">Characters</button>
+    <button class="tab" data-view="vWave">Waveform</button>
+  </nav>
   <span class="grow"></span>
   <span id="appstate"></span>
   <span id="cmds"></span>
   <button class="quiet" id="pause" title="Space">Pause</button>
-  <label><input type="checkbox" id="beep" checked> beep</label>
-  <button class="quiet" id="clear">Clear</button>
-  <button class="quiet" id="copy">Copy all</button>
-  <button class="quiet" id="save" title="the session, as received, to a file">Save</button>
-  <button class="quiet" id="open" title="play a saved session">Open</button>
-  <input type="file" id="file" accept=".jsonl,.txt" hidden>
+  <span id="more">
+    <label><input type="checkbox" id="beep" checked> beep</label>
+    <button class="quiet" id="clear">Clear</button>
+    <button class="quiet" id="copy">Copy all</button>
+    <button class="quiet" id="save" title="the session, as received, to a file">Save</button>
+    <button class="quiet" id="open" title="play a saved session">Open</button>
+    <input type="file" id="file" accept=".jsonl,.txt" hidden>
+  </span>
+  <button class="quiet" id="menuBtn" title="more">⋯</button>
   <button id="connect">Connect</button>
 </header>
-<section id="insp"><span class="more">the inspector's result shows here</span></section>
+<section id="insp" class="empty"></section>
 
 <section class="view on" id="vAll">
   <div class="part" id="allLine"><div class="big"><span class="bigText mono empty">a line read by the instrument shows here, big</span></div></div>
@@ -506,9 +536,12 @@ function drawWave() {
       g.fillStyle = 'rgba(111,195,255,0.08)'; g.fillRect(Math.max(L, x0), T, Math.min(W - R, x1) - Math.max(L, x0), ph);
       g.strokeStyle = 'rgba(111,195,255,0.35)'; g.strokeRect(x0, T + 1, x1 - x0, ph - 2);
       g.fillStyle = '#6fc3ff';
-      const label = (isCtl(val) ? ctlName(val) : "'" + String.fromCharCode(val) + "'") + ' ' + val.toString(16).padStart(2, '0').toUpperCase();
+      const ch = isCtl(val) ? ctlName(val) : "'" + String.fromCharCode(val) + "'";
       g.font = font(x1 - x0 > 90 ? 16 : 12);
-      g.fillText(label, x0 + 3, T - 10);
+      const room = x1 - x0 - 4;
+      let label = ch + ' ' + val.toString(16).padStart(2, '0').toUpperCase();
+      if (g.measureText(label).width > room) label = ch;
+      if (g.measureText(label).width <= room) g.fillText(label, x0 + 3, T - 10);
     }
   }
 
@@ -649,6 +682,7 @@ function showInsp(m) {
   lastInsp = r;
   const box = $('insp');
   box.textContent = '';
+  box.classList.remove('empty');
   const add = (cls, text) => { const e = document.createElement('span'); e.className = cls; e.textContent = text; box.appendChild(e); return e; };
   add('name', r.name + (r.baud ? ' ' + r.baud : ''));
   if (r.cls === 'lin') add('fmt mono', m.checksum === 'enhanced' ? '2.x' : m.checksum === 'classic' ? '1.x' : 'LIN');
@@ -983,6 +1017,7 @@ $('save').onclick = () => {
   setTimeout(() => URL.revokeObjectURL(a.href), 5000);
 };
 $('open').onclick = () => $('file').click();
+$('menuBtn').onclick = () => document.querySelector('header').classList.toggle('open');
 $('file').onchange = async () => {
   const f = $('file').files[0];
   if (!f) return;
