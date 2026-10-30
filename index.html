@@ -243,6 +243,7 @@ function redraw() {
   if (cur('.bigText')) fitBig(cur('.big'), cur('.bigText'));
   if (cur('.chars')) drawChars(cur('.chars'), cur('.last'));
   if (cur('canvas')) drawWave();
+  if (view === 'vTerm' && termFollow) $('term').scrollTop = $('term').scrollHeight;
 }
 window.addEventListener('resize', redraw);
 
@@ -349,11 +350,16 @@ function termByte(c) {
     termLine.lastChild.nodeValue += String.fromCharCode(c);
   }
 }
-function termFeed(bytes) {
+// Following the end, unless scrolled back. Kept as a flag: while the view is
+// hidden there is nothing to scroll, and shown again it would open at the top.
+let termFollow = true;
+$('term').addEventListener('scroll', () => {
   const t = $('term');
-  const atEnd = t.scrollTop + t.clientHeight >= t.scrollHeight - 30;   // following the end, unless scrolled back
+  if (t.clientHeight) termFollow = t.scrollTop + t.clientHeight >= t.scrollHeight - 30;
+});
+function termFeed(bytes) {
   for (const c of bytes) termByte(c);
-  if (atEnd) t.scrollTop = t.scrollHeight;
+  if (termFollow) $('term').scrollTop = $('term').scrollHeight;
 }
 $('eol').onchange = () => { for (const e of document.querySelectorAll('#term .eol')) e.hidden = !$('eol').checked; };
 $('smaller').onclick = () => { termSize = Math.max(10, termSize - 2); $('term').style.fontSize = termSize + 'px'; };
