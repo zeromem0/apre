@@ -121,7 +121,7 @@
     #tabs .tab { flex: none; padding: 6px 12px; font-size: 13px; }
     #appstate { order: 11; font-size: 13px; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     #cmds { order: 12; display: flex; gap: 6px; }
-    #pause { order: 13; padding: 6px 12px; }
+    #pause, #clear { order: 13; padding: 6px 12px; }
     #cmds button { padding: 6px 12px; }
     #more { display: none; }
     header.open #more { display: flex; order: 14; width: 100%; gap: 6px; flex-wrap: wrap; align-items: center; }
@@ -153,9 +153,9 @@
   <span id="appstate"></span>
   <span id="cmds"></span>
   <button class="quiet" id="pause" title="Space">Pause</button>
+  <button class="quiet" id="clear" title="a clean screen; the instrument sends its result and state again">Clear</button>
   <span id="more">
     <label><input type="checkbox" id="beep" checked> beep</label>
-    <button class="quiet" id="clear">Clear</button>
     <button class="quiet" id="copy">Copy all</button>
     <button class="quiet" id="save" title="the session, as received, to a file">Save</button>
     <button class="quiet" id="open" title="play a saved session">Open</button>
@@ -1084,12 +1084,20 @@ $('file').onchange = async () => {
 };
 
 $('connect').onclick = () => connect().catch(e => setState('error: ' + (e.message || e)));
+// Clear: everything off the screen, as on opening the page; then the instrument
+// sends its result and state again, so what shows is what is on the wire now.
 $('clear').onclick = () => {
   lines.length = 0; raw = []; $('history').textContent = '';
   linIds.clear(); modbus.length = 0; lineBuf = '';
   $('term').textContent = ''; termLine = termPrev = null; termCR = false;
   for (const t of $$('.bigText')) { t.className = 'bigText mono empty'; t.textContent = 'a line read by the instrument shows here, big'; }
+  pending.length = 0; if (paused) setPaused(false);
+  wave = null; curA = curB = hoverAt = null;
+  for (const e of $$('.waveInfo')) e.textContent = 'no waveform yet';
+  lastInsp = null; $('insp').textContent = ''; $('insp').classList.add('empty');
+  $('inspBig').innerHTML = "<div class=\"facts\">AprecID's result and the frames it took apart show here</div>";
   redraw();
+  if (link.cmd) { sendCmd('get', { what: 'insp' }); sendCmd('get', { what: 'state' }); }
 };
 setState('not connected · ' + ENV);
 $('copy').onclick = () => navigator.clipboard.writeText(lines.map(l => l.time.toLocaleTimeString() + '\t' + l.s).join('\n'));
