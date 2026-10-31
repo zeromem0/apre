@@ -232,9 +232,12 @@ const HAS_SERIAL = 'serial' in navigator, HAS_USB = 'usb' in navigator;
 const ANDROID = /Android/i.test(navigator.userAgent);
 // what this browser offers, said at the top: without a secure page (HTTPS,
 // localhost, or the address marked as secure in chrome://flags) there is neither
-const ENV = (window.isSecureContext ? 'secure page' : 'NOT a secure page') +
+// In the Android app (android/ in the project) the app has the USB itself and
+// hands the page its lines through window.ApreApp: no port to choose.
+const APP = window.ApreApp || null;
+const ENV = APP ? 'apre app' : (window.isSecureContext ? 'secure page' : 'NOT a secure page') +
             ' · serial ' + (HAS_SERIAL ? 'yes' : 'no') + ' · usb ' + (HAS_USB ? 'yes' : 'no');
-if (!HAS_SERIAL && !HAS_USB) $('note').hidden = false;
+if (!HAS_SERIAL && !HAS_USB && !APP) $('note').hidden = false;
 function setState(text, on) { $('state').textContent = text; $('state').classList.toggle('on', !!on); }
 
 // --- views --------------------------------------------------------------------
@@ -893,6 +896,7 @@ function takeTheme(m) {
   const r = document.documentElement.style;
   for (const k in set) r.setProperty('--' + k, set[k]);
   document.querySelector('meta[name=theme-color]')?.setAttribute('content', m.bg);
+  if (APP && APP.color) APP.color(m.bg);           // the app's frame, behind the system bars
   redraw();
 }
 
@@ -920,7 +924,8 @@ async function sendCmd(what, extra) {
   const line = JSON.stringify({ t: 'cmd', id: ++cmdId, do: what, ...(extra || {}) }) + '\n';
   const bytes = new TextEncoder().encode(line);
   try {
-    if (port && port.writable) {
+    if (native) APP.send(line);
+    else if (port && port.writable) {
       writer = writer || port.writable.getWriter();
       await writer.write(bytes);
     } else if (usb && usb.epOut !== null) {
@@ -939,6 +944,7 @@ function takeChunk(dec, state, bytes) {
 }
 
 async function connect() {
+  if (APP) { if (native) APP.close(); else { setState('looking for the instrument'); APP.open(); } return; }
   if (port || usb) { again = null; await disconnect(); return; }
   if (!HAS_SERIAL && !HAS_USB) { setState('no Web Serial and no WebUSB here: ' + ENV); return; }
   if (!HAS_SERIAL || (ANDROID && HAS_USB)) {      // on Android, Web Serial (where there is one) does not see USB
@@ -1031,6 +1037,23 @@ async function openUsb(dev) {
   await disconnect(true);
 }
 
+// The app's side: it opens the instrument by itself (plugged in, or the app
+// started with it there), DTR down and up as above, and calls these.
+let native = false;
+window.apreNative = {
+  opened(name) { native = true; opened('connected: ' + name + ', waiting for the instrument'); },
+  lines(text) { for (const l of text.split('\n')) if (l) handle(l); },
+  closed(lost) {
+    if (!native) return;
+    native = false; link.open = false;
+    $('connect').textContent = 'Connect';
+    $('cmds').textContent = '';
+    setState(lost ? 'lost; opened again when the instrument comes back' : 'not connected');
+    $('state').classList.remove('warn');
+  },
+  error(text) { setState(text); },
+};
+
 function opened(text) {
   Object.assign(link, { open: true, proto: 0, fw: '', cmd: false, lastN: -1, gaps: 0, lost: 0, tickAt: 0, went: false });
   $('connect').textContent = 'Disconnect';
@@ -1122,6 +1145,7 @@ $('copy').onclick = () => navigator.clipboard.writeText(lines.map(l => l.time.to
 navigator.serial && navigator.serial.addEventListener('disconnect', e => { if (e.target === port) disconnect(true); });
 navigator.usb && navigator.usb.addEventListener('disconnect', e => { if (usb && e.device === usb.dev) disconnect(true); });
 redraw();
+if (APP) APP.ready();               // the app may open the instrument now
 </script>
 </body>
 </html>
