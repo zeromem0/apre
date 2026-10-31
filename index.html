@@ -163,6 +163,8 @@
     <button class="quiet" id="copy">Copy all</button>
     <button class="quiet" id="save" title="the session, as received, to a file">Save</button>
     <button class="quiet" id="open" title="play a saved session">Open</button>
+    <button class="quiet" id="fontBtn" title="a monospace font file of your own (.ttf, .otf, .woff2); with one chosen, back to the built-in">font</button>
+    <input type="file" id="fontFile" accept=".ttf,.otf,.woff,.woff2,font/*" hidden>
     <input type="file" id="file" accept=".jsonl,.txt" hidden>
   </span>
   <button class="quiet" id="menuBtn" title="more">⋯</button>
@@ -221,7 +223,8 @@
 'use strict';
 const $ = id => document.getElementById(id);
 const $$ = sel => Array.from(document.querySelectorAll(sel));
-const MONO = getComputedStyle(document.documentElement).getPropertyValue('--mono');
+const MONO0 = getComputedStyle(document.documentElement).getPropertyValue('--mono');
+let MONO = MONO0;                   // with a font of one's own first (fontBtn, below)
 const lines = [];
 let port = null, reader = null;
 
@@ -485,6 +488,10 @@ function takeWave(m) {
   const d = b64bytes(m.d).subarray(0, cnt);
   const same = wave && wave.n === cnt && wave.hz === m.hz;
   wave = { ...m, d, n: cnt, zero: old ? m.zero / 16 : m.zero, per: old ? m.cpv / 16 : m.perVolt, th: old ? m.th / 16 : m.th };
+  // AprecID's picture of a line that is not serial (a level, PWM, CAN...): no speed
+  // and no threshold, which would be the decoder's from a line read before
+  if (m.kind === 'insp' && lastInsp && !lastInsp.baud) Object.assign(wave, { baud: 0, fmt: '', th: 0, marks: [], chars: [] });
+  m = wave;
   if (!same) { xs = 0; xe = cnt; curA = curB = null; }
   const kinds = { live: 'live', snap: 'SNAP capture', insp: 'AprecID' };
   const us = cnt / m.hz * 1e6;
@@ -1105,6 +1112,41 @@ $('save').onclick = () => {
   setTimeout(() => URL.revokeObjectURL(a.href), 5000);
 };
 $('open').onclick = () => $('file').click();
+// A monospace font of one's own, from a file on the phone or the PC: kept in this
+// browser (localStorage, as base64), put first in --mono; the button with one
+// chosen goes back to the built-in list.
+async function useFont(name, buf) {
+  const f = new FontFace('apreUser', buf);
+  await f.load();
+  document.fonts.add(f);
+  MONO = '"apreUser", ' + MONO0;
+  document.documentElement.style.setProperty('--mono', MONO);
+  $('fontBtn').textContent = 'font: ' + name.replace(/\.[^.]+$/, '') + ' ×';
+  redraw();
+}
+$('fontBtn').onclick = () => {
+  if (MONO === MONO0) { $('fontFile').click(); return; }
+  MONO = MONO0;
+  document.documentElement.style.removeProperty('--mono');
+  $('fontBtn').textContent = 'font';
+  try { localStorage.removeItem('apre.font'); } catch {}
+  redraw();
+};
+$('fontFile').onchange = async () => {
+  const file = $('fontFile').files[0];
+  $('fontFile').value = '';
+  if (!file) return;
+  const buf = await file.arrayBuffer();
+  try { await useFont(file.name, buf); } catch (e) { setState('not a font: ' + file.name); return; }
+  let b = ''; const a = new Uint8Array(buf);
+  for (let i = 0; i < a.length; i += 32768) b += String.fromCharCode.apply(null, a.subarray(i, i + 32768));
+  try { localStorage.setItem('apre.font', JSON.stringify({ name: file.name, b64: btoa(b) })); }
+  catch { setState('font in use, too big to keep for next time'); }
+};
+try {
+  const k = JSON.parse(localStorage.getItem('apre.font') || 'null');
+  if (k) useFont(k.name, b64bytes(k.b64).buffer).catch(() => {});
+} catch {}
 $('menuBtn').onclick = () => document.querySelector('header').classList.toggle('open');
 $('file').onchange = async () => {
   const f = $('file').files[0];
