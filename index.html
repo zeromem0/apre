@@ -33,6 +33,8 @@
            font-size: 14px; font-weight: 600; cursor: pointer; }
   button.quiet, button.tab { background: transparent; color: var(--muted); border: 1px solid var(--line); }
   button.tab.on { background: var(--line); color: var(--text); }
+  select { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 6px;
+           padding: 5px 8px; font-size: 14px; }
   button.quiet.on { color: var(--accent); border-color: var(--accent); }
   label { color: var(--muted); font-size: 14px; }
   #insp { display: flex; align-items: baseline; gap: 18px; padding: 10px 16px; flex-wrap: wrap;
@@ -155,6 +157,8 @@
   <button class="quiet" id="pause" title="Space">Pause</button>
   <button class="quiet" id="clear" title="a clean screen; the instrument sends its result and state again">Clear</button>
   <span id="more">
+    <label title="the app the instrument goes to when the page connects, and now">app
+      <select id="goApp"><option value="insp">AprecID</option><option value="tester">RS232 Tester</option><option value="">as it is</option></select></label>
     <label><input type="checkbox" id="beep" checked> beep</label>
     <button class="quiet" id="copy">Copy all</button>
     <button class="quiet" id="save" title="the session, as received, to a file">Save</button>
@@ -782,6 +786,12 @@ setInterval(() => { if (view === 'vInsp' && linIds.size) drawInsp(); }, 1000);  
 let instState = null;
 function takeState(m) {
   instState = m;
+  // hands-off: on connecting, the instrument goes to the app chosen (AprecID, unless
+  // changed in the menu), once; after that it is left where the keys put it
+  if (link.open && link.cmd && !link.went) {
+    link.went = true;
+    if (goApp() && m.app !== goApp()) sendCmd('app', { to: goApp() });
+  }
   const bits = [m.app === 'insp' ? 'AprecID' : m.app];
   if (m.app === 'tester') bits.push(m.run, (m.auto ? 'auto ' : '') + (m.baud || '') + (m.fmt ? ' ' + m.fmt : ''));
   $('appstate').textContent = bits.filter(Boolean).join(' · ');
@@ -811,6 +821,14 @@ function setPaused(p) {
   if (!paused) { const q = pending.splice(0); for (const t of q) handle(t); }
 }
 $('pause').onclick = () => setPaused(!paused);
+
+// The app the instrument goes to: kept in this browser only.
+const goApp = () => $('goApp').value;
+try { const v = localStorage.getItem('apre.goApp'); if (v !== null) $('goApp').value = v; } catch {}
+$('goApp').onchange = () => {
+  try { localStorage.setItem('apre.goApp', goApp()); } catch {}
+  if (link.open && link.cmd && goApp()) sendCmd('app', { to: goApp() });
+};
 document.addEventListener('keydown', e => {
   if (e.code === 'Space' && e.target.tagName !== 'INPUT') { e.preventDefault(); setPaused(!paused); }
 });
@@ -1014,7 +1032,7 @@ async function openUsb(dev) {
 }
 
 function opened(text) {
-  Object.assign(link, { open: true, proto: 0, fw: '', cmd: false, lastN: -1, gaps: 0, lost: 0, tickAt: 0 });
+  Object.assign(link, { open: true, proto: 0, fw: '', cmd: false, lastN: -1, gaps: 0, lost: 0, tickAt: 0, went: false });
   $('connect').textContent = 'Disconnect';
   setState(text, true);
 }
