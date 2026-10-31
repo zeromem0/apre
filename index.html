@@ -143,7 +143,7 @@
   <span class="grow"></span>
   <nav id="tabs">
     <button class="tab on" data-view="vAll">All</button>
-    <button class="tab" data-view="vInsp">Inspector</button>
+    <button class="tab" data-view="vInsp">AprecID</button>
     <button class="tab" data-view="vLine">Line</button>
     <button class="tab" data-view="vTerm">Terminal</button>
     <button class="tab" data-view="vChars">Characters</button>
@@ -178,7 +178,7 @@
 </section>
 
 <section class="view" id="vInsp">
-  <div id="inspBig"><div class="facts">the inspector's result and the frames it took apart show here</div></div>
+  <div id="inspBig"><div class="facts">AprecID's result and the frames it took apart show here</div></div>
   <div id="frames"></div>
 </section>
 
@@ -479,7 +479,7 @@ function takeWave(m) {
   const same = wave && wave.n === cnt && wave.hz === m.hz;
   wave = { ...m, d, n: cnt, zero: old ? m.zero / 16 : m.zero, per: old ? m.cpv / 16 : m.perVolt, th: old ? m.th / 16 : m.th };
   if (!same) { xs = 0; xe = cnt; curA = curB = null; }
-  const kinds = { live: 'live', snap: 'SNAP capture', insp: 'inspector' };
+  const kinds = { live: 'live', snap: 'SNAP capture', insp: 'AprecID' };
   const us = cnt / m.hz * 1e6;
   const info = `${kinds[m.kind] || m.kind} · ${cnt} samples at ${fmtRate(m.hz)} (${fmtTime(us)}) · R${m.range}` +
     (m.baud ? ` · ${m.baud} ${m.fmt}` : '') + (m.chars && m.chars.length ? ` · ${m.chars.length} characters` : '');
@@ -782,7 +782,7 @@ setInterval(() => { if (view === 'vInsp' && linIds.size) drawInsp(); }, 1000);  
 let instState = null;
 function takeState(m) {
   instState = m;
-  const bits = [m.app];
+  const bits = [m.app === 'insp' ? 'AprecID' : m.app];
   if (m.app === 'tester') bits.push(m.run, (m.auto ? 'auto ' : '') + (m.baud || '') + (m.fmt ? ' ' + m.fmt : ''));
   $('appstate').textContent = bits.filter(Boolean).join(' · ');
   const c = $('cmds');
@@ -799,7 +799,7 @@ function takeState(m) {
     if (m.run === 'run') btn('Hold', 'hold', 'stop and keep what is on the screen');
     btn('Snap', 'snap', 'wait for a message and catch it');
   }
-  if (m.app === 'insp') btn('Again', 'again', 'the inspector looks again');
+  if (m.app === 'insp') btn('Again', 'again', 'AprecID looks again');
 }
 // --- pause: what comes meanwhile is kept and shown on going on ----------------------
 let paused = false;
