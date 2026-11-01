@@ -110,7 +110,7 @@
   #insp.empty { display: none; }              /* no result yet: no empty bar */
 
   /* A phone: the name, the state and Connect on one row; the tabs on one that scrolls
-     sideways; the commands; the rarely used buttons behind the menu. */
+     sideways; the commands and the rarely used buttons behind the menu. */
   @media (max-width: 720px) {
     header { gap: 6px; padding: 6px 10px; }
     header h1 { font-size: 15px; order: 0; }
@@ -125,7 +125,10 @@
     #cmds { order: 12; display: flex; gap: 6px; }
     #pause, #clear { order: 13; padding: 6px 12px; }
     #cmds button { padding: 6px 12px; }
-    #more { display: none; }
+    #more, #appstate, #cmds, #pause, #clear { display: none; }     /* behind the menu, with the rest */
+    header.open #appstate { display: block; }
+    header.open #cmds { display: flex; }
+    header.open #pause, header.open #clear { display: inline-block; }
     header.open #more { display: flex; order: 14; width: 100%; gap: 6px; flex-wrap: wrap; align-items: center; }
     #insp { padding: 6px 10px; gap: 10px; min-height: 0; }
     #insp .name { font-size: 22px; } #insp .fmt { font-size: 17px; } #insp .more { font-size: 12px; }
