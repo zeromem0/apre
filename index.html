@@ -138,6 +138,11 @@
   #vAll .part { display: flex; flex-direction: column; min-height: 0; overflow: hidden; border-bottom: 1px solid var(--line); }
   .view { overflow: hidden; }
   #allLine { flex: 2; } #allChars { flex: 3; } #allWave { flex: 4; }
+  /* the instrument's screen: its own pixels, each a whole number of the device's */
+  .scrBox { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #000; overflow: hidden; }
+  #scr { image-rendering: pixelated; image-rendering: crisp-edges; cursor: pointer; }
+  .scrInfo { color: #888; font-size: 13px; padding: 6px 10px; text-align: center; }
+  body.full header, body.full #insp, body.full .scrInfo { display: none !important; }
   #note { padding: 24px; color: var(--muted); max-width: 640px; margin: auto; line-height: 1.5; }
 </style>
 </head>
@@ -153,6 +158,7 @@
     <button class="tab" data-view="vTerm">Terminal</button>
     <button class="tab" data-view="vChars">Characters</button>
     <button class="tab" data-view="vWave">Waveform</button>
+    <button class="tab" data-view="vScr">Screen</button>
   </nav>
   <span class="grow"></span>
   <span id="appstate"></span>
@@ -216,6 +222,11 @@
   <div class="readout mono"></div>
 </section>
 
+<section class="view" id="vScr">
+  <div class="scrBox"><canvas id="scr" width="320" height="240"></canvas>
+    <div class="scrInfo">the instrument's screen, read again and again while this view is open; tap it: the page around it goes and comes back</div></div>
+</section>
+
 <div id="note" hidden>
   This page needs Chrome or Edge: on a PC (Web Serial) or on Android (WebUSB, with a USB-C OTG
   cable). Open it from a local file on a PC, or over HTTPS; plug the DST-210 in, start the tester
@@ -259,8 +270,10 @@ function redraw() {
   if (view === 'vInsp' && typeof drawInsp === 'function') drawInsp();
   if (cur('.bigText')) fitBig(cur('.big'), cur('.bigText'));
   if (cur('.chars')) drawChars(cur('.chars'), cur('.last'));
-  if (cur('canvas')) drawWave();
+  if (cur('.waveBox')) drawWave();
   if (view === 'vTerm' && termFollow) $('term').scrollTop = $('term').scrollHeight;
+  if (view === 'vScr') { fitScreen(); askScreen(); }
+  else document.body.classList.remove('full');
 }
 window.addEventListener('resize', redraw);
 
@@ -501,7 +514,7 @@ function takeWave(m) {
   const info = `${kinds[m.kind] || m.kind} · ${cnt} samples at ${fmtRate(m.hz)} (${fmtTime(us)}) · R${m.range}` +
     (m.baud ? ` · ${m.baud} ${m.fmt}` : '') + (m.chars && m.chars.length ? ` · ${m.chars.length} characters` : '');
   for (const e of $$('.waveInfo')) e.textContent = info;
-  if (cur('canvas')) drawWave();
+  if (cur('.waveBox')) drawWave();
 }
 
 const volts = c => (c - wave.zero) / wave.per;
@@ -831,7 +844,7 @@ function setPaused(p) {
   paused = p;
   $('pause').classList.toggle('on', paused);
   $('pause').textContent = paused ? 'Paused (' + pending.length + ')' : 'Pause';
-  if (!paused) { const q = pending.splice(0); for (const t of q) handle(t); }
+  if (!paused) { const q = pending.splice(0); for (const t of q) handle(t); askScreen(); }
 }
 $('pause').onclick = () => setPaused(!paused);
 
@@ -875,8 +888,10 @@ function take(m) {
   }
   if (m.t === 'hello') {
     Object.assign(link, { proto: m.proto || 0, dev: m.dev || '', fw: m.fw || '', cmd: (m.caps || []).includes('cmd'),
+                          screen: (m.caps || []).includes('screen'),
                           gaps: 0, lost: 0, tickAt: performance.now() });
     linkStatus();
+    scrAsked = 0; askScreen();
   }
   else if (m.t === 'tick') { link.tickAt = performance.now(); link.lost = m.lost || 0; }
   else if (m.t === 'insp') showInsp(m);
@@ -886,7 +901,49 @@ function take(m) {
   else if (m.t === 'frame') takeFrame(m);
   else if (m.t === 'state') takeState(m);
   else if (m.t === 'theme') takeTheme(m);
+  else if (m.t === 'screen') takeScreen(m);
 }
+
+// --- the instrument's screen -------------------------------------------------------
+// Asked for with "screen"; it comes a row at a time, as runs of one colour (a
+// byte of length - 1, the colour RGB565 high byte first), in base64. While the
+// view is open the next picture is asked for once the last row is in, or after
+// 5 s if a row went missing. Drawn at the largest whole number of the device's
+// own pixels per pixel of the instrument that fits: no blur, no uneven pixels.
+const scrCtx = $('scr').getContext('2d');
+const scrImg = scrCtx.createImageData(320, 240);
+let scrAsked = 0, scrTimer = 0;
+function askScreen() {
+  if (view !== 'vScr' || !link.open || !link.screen || paused) return;
+  if (scrAsked && performance.now() - scrAsked < 5000) return;      // one on its way
+  scrAsked = performance.now();
+  sendCmd('screen');
+  clearTimeout(scrTimer);
+  scrTimer = setTimeout(askScreen, 5100);
+}
+function takeScreen(m) {
+  const b = atob(m.d || ''), d = scrImg.data, y = m.y | 0;
+  if (y < 0 || y >= 240) return;
+  let x = 0;
+  for (let i = 0; i + 2 < b.length && x < 320; i += 3) {
+    const len = b.charCodeAt(i) + 1, c = b.charCodeAt(i + 1) << 8 | b.charCodeAt(i + 2);
+    const r = (c >> 11) * 255 / 31, g = (c >> 5 & 63) * 255 / 63, bl = (c & 31) * 255 / 31;
+    for (let k = 0; k < len && x < 320; k++, x++) {
+      const o = (y * 320 + x) * 4;
+      d[o] = r; d[o + 1] = g; d[o + 2] = bl; d[o + 3] = 255;
+    }
+  }
+  scrCtx.putImageData(scrImg, 0, 0, 0, y, 320, 1);
+  if (y === 239) { scrAsked = 0; clearTimeout(scrTimer); scrTimer = setTimeout(askScreen, 300); }
+}
+function fitScreen() {
+  const box = $('scr').parentElement, dpr = window.devicePixelRatio || 1;
+  const info = document.body.classList.contains('full') ? 0 : $('scr').nextElementSibling.offsetHeight;
+  const k = Math.max(1, Math.floor(Math.min(box.clientWidth * dpr / 320, (box.clientHeight - info) * dpr / 240)));
+  $('scr').style.width = 320 * k / dpr + 'px';
+  $('scr').style.height = 240 * k / dpr + 'px';
+}
+$('scr').onclick = () => { document.body.classList.toggle('full'); fitScreen(); };
 
 // The instrument's theme: its colours put on the page's. What has no colour of
 // its own on the instrument is a mix of two that have.
@@ -921,7 +978,7 @@ function record(text) {
 
 function handle(text) {
   if (!text || text[0] !== '{') return;
-  record(text);
+  if (text.indexOf('"t":"screen"') < 0 || text.indexOf('"t":"screen"') > 20) record(text);
   if (paused) { pending.push(text); $('pause').textContent = 'Paused (' + pending.length + ')'; return; }
   let m;
   try { m = JSON.parse(text); } catch { return; }
